@@ -38,7 +38,7 @@ class Mlx:
     def start_quick_profile(self, browser_type="mimic"):
         payload = {
     "browser_type": browser_type,
-    "os_type": "macos",
+    "os_type": "windows",
     "automation": "selenium",
     "parameters": {
         "fingerprint": {

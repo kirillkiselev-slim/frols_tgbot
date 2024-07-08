@@ -1,4 +1,6 @@
+import datetime
 import logging
+import re
 from typing import Mapping, List
 import os
 import sys
@@ -33,6 +35,10 @@ from check_tokens import (
 from site_elements import elements
 
 WEBSITE = 'http://www.encar.com/fc/fc_carsearchlist.do'
+
+A7_list = []
+
+RETRY_PERIOD = 300
 
 load_dotenv()
 
@@ -85,19 +91,21 @@ def open_and_start_multilogin_profile():
 #     }
 #     options.add_experimental_option("prefs", prefs)
 
-def filter_website(driver, website):
+def set_filter_website(driver, website):
     time.sleep(1)
     driver.get(website)
-    wait = WebDriverWait(driver, 10)
+    driver.maximize_window()
+    wait = WebDriverWait(driver, 25)
 
-    dd_element1 = wait.until(EC.visibility_of_element_located((
+    audi = wait.until(EC.visibility_of_element_located((
         By.XPATH, elements['audi_link'])))
-    dd_element1.click()
+    audi.click()
+    time.sleep(2)
 
-    dd_element2 = wait.until(EC.element_to_be_clickable((
+    audi_a7 = wait.until(EC.visibility_of_element_located((
         By.XPATH, elements['a7_audi'])))
-    dd_element2.click()
-
+    audi_a7.click()
+    time.sleep(2)
     date = wait.until(EC.visibility_of_element_located((
         By.XPATH, '//a[@data-enlog-dt-eventnamegroup="필터" and text()="연식"]'
     )))
@@ -115,7 +123,7 @@ def filter_website(driver, website):
     select_month1 = wait.until(EC.visibility_of_element_located((
         By.CLASS_NAME, 'month')))
     month1 = Select(select_month1)
-    month1.select_by_value('2')
+    month1.select_by_value('1')
 
     time.sleep(2)
     year_to = wait.until(EC.visibility_of_element_located((
@@ -133,22 +141,87 @@ def filter_website(driver, website):
 
     driver.execute_script("arguments[0].click();", fuel)
 
-    time.sleep(1)
+    time.sleep(2)
     wait.until(EC.element_to_be_clickable((
         By.XPATH, elements['diesel_electric']
     ))).click()
-    time.sleep(1)
+    time.sleep(2)
     wait.until(EC.element_to_be_clickable((
         By.XPATH, elements['gasoline_electric']
     ))).click()
-    time.sleep(1)
+    time.sleep(2)
     wait.until(EC.element_to_be_clickable((
         By.XPATH, elements['diesel']
     ))).click()
+    time.sleep(2)
+
+    # page_row = wait.until(EC.element_to_be_clickable((
+    #     By.ID, 'pagerow'
+    # )))
+    # select_cars_on_page = Select(page_row)
+    # select_cars_on_page.select_by_value('50')
+    # time.sleep(2)
+
+    # TODO add alert text exception - UnexpectedAlertPresentException
 
 
-filter_website(open_and_start_multilogin_profile(), WEBSITE)
+def get_last_page(driver):
+    wait = WebDriverWait(driver, 25)
+    wait.until(EC.visibility_of_element_located((
+        By.ID, 'pagination')))
+    time.sleep(2)
+    page_elements = wait.until(EC.visibility_of_all_elements_located((
+        By.CLASS_NAME, 'page')))
+    last_page_element = page_elements[-1]
+    time.sleep(2)
+    last_page = int(last_page_element.find_element(
+        By.TAG_NAME, 'a').get_attribute('data-page'))
+    print("Last page number:", last_page)
+    return last_page
 
-# filter_website(WEBSITE)
+
+def get_car_ids(car_links):
+    hrefs = [car.get_attribute('href') for car in car_links]
+    pattern = r'carid=(\d+)&'
+    car_ids = [re.search(pattern, href).group(1) for href in hrefs
+               if re.search(pattern, href)]
+    return car_ids
 
 
+def parse_cars(driver):
+    time_before = datetime.datetime.now()
+
+    wait = WebDriverWait(driver, 25)
+    set_filter_website(driver=driver, website=WEBSITE)
+    last_page = get_last_page(driver=driver)
+    all_car_ids = []
+
+    for page in range(1, last_page + 1):
+        list_of_cars = wait.until(EC.visibility_of_element_located((By.ID, 'sr_normal')))
+        car_links = list_of_cars.find_elements(By.TAG_NAME, 'a')
+
+        car_ids = get_car_ids(car_links=car_links)
+        all_car_ids.extend(car_ids)
+
+        if page < last_page:
+            next_page_element = wait.until(
+                EC.element_to_be_clickable((By.XPATH, f'//a[@data-page="{page + 1}"]')))
+            next_page_element.click()
+
+            time.sleep(2)
+
+    time_after = datetime.datetime.now()
+
+    print(f'Time taken to extract information:'
+          f' {(time_after - time_before).total_seconds()} seconds')
+    print(f'Original list: {len(all_car_ids)};'
+          f' List with deleted duplicates: {len(set(all_car_ids))}')
+    return set(all_car_ids)
+
+
+def main():
+    new_car_links = f'http://www.encar.com/dc/dc_cardetailview.do&carid={...}'
+    a7_parser = parse_cars(driver=open_and_start_multilogin_profile())
+
+
+main()
