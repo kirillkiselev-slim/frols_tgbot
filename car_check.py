@@ -1,18 +1,14 @@
 import datetime
 import logging
 import re
-from typing import Mapping, List
+from typing import List, Set
 import os
 import sys
 import time
 from logging.handlers import RotatingFileHandler
-from http import HTTPStatus
+import multiprocessing as mp
 
 import requests
-from selenium import webdriver
-from selenium.webdriver import ActionChains
-from selenium.webdriver.chromium.options import ChromiumOptions
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (UnexpectedAlertPresentException,
                                         TimeoutException)
@@ -37,29 +33,22 @@ from site_elements import elements
 
 load_dotenv()
 
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
 WEBSITE = 'http://www.encar.com/fc/fc_carsearchlist.do'
-
 CAR_LINK = 'http://www.encar.com/dc/dc_cardetailview.do&carid='
-
-RETRY_PERIOD = 10
+RETRY_PERIOD = 300
+MAIN_MESSAGE = 'Нашли новые машины! Ура! Вот список ссылок: '
 
 logger = logging.getLogger(__name__)
-
 logger.setLevel(level=logging.DEBUG)
-
 handler = RotatingFileHandler(
     'monitor_cars.logs', maxBytes=50000000, backupCount=5,
 )
-
 logger.addHandler(handler)
-
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-
 handler.setFormatter(formatter)
-
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 
 def check_tokens():
@@ -82,7 +71,7 @@ def send_message(bot, message):
     logger.debug(f'Сообщение отправлено: {message}')
 
 
-def open_and_start_multilogin_profile():
+def start_multilogin_profile():
     mlx = Mlx(email=os.getenv('MLX_EMAIL'), password=os.getenv('MLX_PASS'))
     mlx.signin()
     quick_profile_port = mlx.start_quick_profile()
@@ -90,31 +79,44 @@ def open_and_start_multilogin_profile():
     return driver
 
 
-def set_filter_website(driver, website):
+def stop_profiles():
+    mlx = Mlx(email=os.getenv('MLX_EMAIL'), password=os.getenv('MLX_PASS'))
+    mlx.signin()
+    mlx.stop_all_profiles()
+
+
+def set_filters_on_website(driver, website, model=None):
     try:
         wait = WebDriverWait(driver, 35)
+
         time.sleep(1)
+
         response = requests.get(website)
         if response.status_code != 200:
             raise WebsiteIsNotAvailableError(
-                f'{website} website is not available!'
-                f'Код ответа сайта: "{response.status_code}'
+                f'{website} website is not available!\n'
+                f'Код ответа сайта: "{response.status_code}\n'
                 f' Адрес запроса: {response.url}'
             )
-        driver.get(website)
 
-        driver.maximize_window()
+        driver.get(website)
 
         audi = wait.until(EC.visibility_of_element_located((
             By.XPATH, elements['audi_link'])))
         audi.click()
         time.sleep(2)
 
-        audi_a7 = wait.until(EC.visibility_of_element_located((
-            By.XPATH, elements['a7_audi'])))
-        audi_a7.click()
+        if model == 'a7':
+            audi_a7 = wait.until(EC.visibility_of_element_located((
+                By.XPATH, elements['a7_audi'])))
+            audi_a7.click()
+        else:
+            audi_a5 = wait.until(EC.visibility_of_element_located((
+                By.XPATH, elements['a5_audi'])))
+            audi_a5.click()
 
         time.sleep(2)
+
         date = wait.until(EC.visibility_of_element_located((
             By.XPATH, '//a[@data-enlog-dt-eventnamegroup="필터" and text()="연식"]'
         )))
@@ -143,26 +145,27 @@ def set_filter_website(driver, website):
 
         time.sleep(2)
 
-        fuel = wait.until(EC.element_to_be_clickable((
-            By.XPATH, elements['fuel']
-        )))
-        driver.execute_script("arguments[0].scrollIntoView(true);", fuel)
+        if model != 'a5':
+            fuel = wait.until(EC.element_to_be_clickable((
+                By.XPATH, elements['fuel']
+            )))
+            driver.execute_script("arguments[0].scrollIntoView(true);", fuel)
 
-        driver.execute_script("arguments[0].click();", fuel)
+            driver.execute_script("arguments[0].click();", fuel)
 
-        time.sleep(2)
-        wait.until(EC.element_to_be_clickable((
-            By.XPATH, elements['diesel_electric']
-        ))).click()
-        time.sleep(2)
-        wait.until(EC.element_to_be_clickable((
-            By.XPATH, elements['gasoline_electric']
-        ))).click()
-        time.sleep(2)
-        wait.until(EC.element_to_be_clickable((
-            By.XPATH, elements['diesel']
-        ))).click()
-        time.sleep(2)
+            time.sleep(2)
+            wait.until(EC.element_to_be_clickable((
+                By.XPATH, elements['diesel_electric']
+            ))).click()
+            time.sleep(2)
+            wait.until(EC.element_to_be_clickable((
+                By.XPATH, elements['gasoline_electric']
+            ))).click()
+            time.sleep(2)
+            wait.until(EC.element_to_be_clickable((
+                By.XPATH, elements['diesel']
+            ))).click()
+            time.sleep(2)
 
         page_row = wait.until(EC.element_to_be_clickable((
             By.ID, 'pagerow'
@@ -193,7 +196,7 @@ def get_last_page(driver):
     return last_page
 
 
-def get_car_ids(car_links):
+def get_car_ids(car_links: List) -> List:
     hrefs = [car.get_attribute('href') for car in car_links]
     pattern = r'carid=(\d+)&'
     car_ids = [re.search(pattern, href).group(1) for href in hrefs
@@ -201,12 +204,14 @@ def get_car_ids(car_links):
     return car_ids
 
 
-def parse_cars(driver):
+def parse_cars(driver, model=None):
     time_before = datetime.datetime.now()
 
     wait = WebDriverWait(driver, 25)
-    set_filter_website(driver=driver, website=WEBSITE)
+
+    set_filters_on_website(driver, WEBSITE, model)
     last_page = get_last_page(driver=driver)
+
     all_car_ids = []
 
     for page in range(1, last_page + 1):
@@ -221,46 +226,63 @@ def parse_cars(driver):
             next_page_element = wait.until(
                 EC.element_to_be_clickable((By.XPATH, f'//a[@data-page="{page + 1}"]')))
             next_page_element.click()
-
             time.sleep(2)
 
     time_after = datetime.datetime.now()
 
+    distinct_car_ids = set(all_car_ids)
+
     logger.debug('Time taken to extract information: '
                  f'{(time_after - time_before).total_seconds():.2f} seconds')
-    logger.debug(f'Actual quantity of cars: {len(set(all_car_ids))}')
-    return set(all_car_ids)
+    logger.debug(f'Quantity of Audi {model.upper()}: '
+                 f'{len(distinct_car_ids)}')
+    return distinct_car_ids
+
+
+def parse_cars_multiprocess(model: str) -> Set:
+    driver = start_multilogin_profile()
+    car_ids = parse_cars(driver, model)
+    return car_ids
 
 
 def main():
-    # bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    a7_parser_before = None
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    parser_before = None
     error_message_not_sent = True
+    audi_models = ('a7', 'a5')
 
     while True:
         try:
-            driver = open_and_start_multilogin_profile()
-            a7_parser_after = sorted(parse_cars(driver=driver))
-            if a7_parser_before is not None:
-                if a7_parser_before == a7_parser_after:
+            with mp.Pool(processes=len(audi_models)) as pool:
+                results = pool.map(parse_cars_multiprocess, audi_models)
+
+            parser_after = sorted([car_id for result in
+                                   results for car_id in result])
+
+            if parser_before is not None:
+                if parser_before == parser_after:
                     continue
 
-                new_car_links = [f'{CAR_LINK}{car}' for car in a7_parser_after if
-                                 car not in a7_parser_before]
-                string_with_new_links = '\n'.join(new_car_links)
-                logger.debug(string_with_new_links)
+                new_car_links = [f'{CAR_LINK}{car}' for car in parser_after if
+                                 car not in parser_before]
+                new_links = '\n'.join(new_car_links)
+                logger.debug(msg='Нашли новые машины!')
+                message = f'{MAIN_MESSAGE} \U0001F389\n{new_links}'
+                send_message(bot, message)
 
-            a7_parser_before = a7_parser_after
+            parser_before = parser_after
 
         except Exception as e:
             logger.exception(e)
             if error_message_not_sent:
-                ...
-                # send_message(bot, str(err) + '\U0001F198')
-                # error_message_not_sent = False
+                send_message(bot, str(e) + '\U0001F198')
+                error_message_not_sent = False
 
         finally:
+            time.sleep(1)
+            stop_profiles()
             time.sleep(RETRY_PERIOD)
 
 
-main()
+if __name__ == '__main__':
+    main()

@@ -221,6 +221,10 @@ class Mlx:
             created = True
             return profile_id, FOLDER_ID, created
 
+    def stop_all_profiles(self):
+        requests.get(url="https://launcher.mlx.yt:45001/api/v1/profile/stop_all?type=quick",
+                     headers=self.headers)
+
 
 class CookieRobot:
 
