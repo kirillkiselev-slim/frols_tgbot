@@ -37,48 +37,49 @@ class Mlx:
 
     def start_quick_profile(self, browser_type="mimic"):
         payload = {
-    "browser_type": browser_type,
-    "os_type": "windows",
-    "automation": "selenium",
-    "parameters": {
-        "fingerprint": {
-            "localization": {
-                "languages": "en-US",
-                "locale": "en-US",
-                "accept_languages": "en-US,en;q=0.5"
-            },
-            # "cmd_params":
-            #     {
-            #     "params": [
-            #         {
-            #             "flag": "--lang",
-            #             "value": "en"
-            #         },
-            #         {
-            #             "flag": "--intl.accept_languages",
-            #             "value": "en-US"
-            #         }
-            #    ]
-            # }
-        },
-        "flags": {
-            "audio_masking": "mask",
-            "fonts_masking": "mask",
-            "geolocation_masking": "mask",
-            "geolocation_popup": "prompt",
-            "graphics_masking": "mask",
-            "graphics_noise": "mask",
-            "localization_masking": "mask",
-            "media_devices_masking": "mask",
-            "navigator_masking": "mask",
-            "ports_masking": "mask",
-            "proxy_masking": "disabled",
-            "screen_masking": "mask",
-            "timezone_masking": "mask",
-            "webrtc_masking": "mask"
+            "browser_type": browser_type,
+            "os_type": "windows",
+            "is_headless": True,
+            "automation": "selenium",
+            "parameters": {
+                "fingerprint": {
+                    "localization": {
+                        "languages": "en-US",
+                        "locale": "en-US",
+                        "accept_languages": "en-US,en;q=0.5"
+                    },
+                    # "cmd_params":
+                    #     {
+                    #     "params": [
+                    #         {
+                    #             "flag": "--lang",
+                    #             "value": "en"
+                    #         },
+                    #         {
+                    #             "flag": "--intl.accept_languages",
+                    #             "value": "en-US"
+                    #         }
+                    #    ]
+                    # }
+                },
+                "flags": {
+                    "audio_masking": "mask",
+                    "fonts_masking": "mask",
+                    "geolocation_masking": "mask",
+                    "geolocation_popup": "prompt",
+                    "graphics_masking": "mask",
+                    "graphics_noise": "mask",
+                    "localization_masking": "mask",
+                    "media_devices_masking": "mask",
+                    "navigator_masking": "mask",
+                    "ports_masking": "mask",
+                    "proxy_masking": "disabled",
+                    "screen_masking": "mask",
+                    "timezone_masking": "mask",
+                    "webrtc_masking": "mask"
+                }
+            }
         }
-    }
-}
         try:
             response = requests.post(url="https://launcher.mlx.yt:45001/api/v2/profile/quick", headers=self.headers,
                                      json=payload)
@@ -124,9 +125,9 @@ class Mlx:
         elif browser_type == 'stealthfox':
             driver = webdriver.Remote(command_executor=f"http://127.0.0.1:{profile_port}", options=Options())
         return driver
-    
+
     def get_proxy_details(self, mapped_account, token=None) -> dict:
-        
+
         if token == None:
             self.token = self.signin()
 
@@ -135,14 +136,14 @@ class Mlx:
         })
         url = "https://profile-proxy.multilogin.com/v1/proxy/connection_url"
         payload = {
-                "country": mapped_account['country_code'],
-                "region": mapped_account['region'],
-                "city": mapped_account['city'],
-                "protocol": "socks5",
-                "sessionType": "sticky",
-                "IPTTL": 0
+            "country": mapped_account['country_code'],
+            "region": mapped_account['region'],
+            "city": mapped_account['city'],
+            "protocol": "socks5",
+            "sessionType": "sticky",
+            "IPTTL": 0
         }
-        response = requests.post(url=url,headers=self.headers,json=payload)
+        response = requests.post(url=url, headers=self.headers, json=payload)
         if response.status_code != 201:
             print(f"Could not get proxy session: {response.status_code}")
         else:
@@ -154,7 +155,7 @@ class Mlx:
                 "password": session[3]
             }
             return proxy_details
-    
+
     def create_profile(self, proxy_details, profile_details, FOLDER_ID):
 
         if self.token == None:
@@ -165,50 +166,50 @@ class Mlx:
         })
 
         payload = {
-        "name": f"{profile_details['first_name']} {profile_details['last_name']}",
-        "folder_id": FOLDER_ID,
-        "browser_type": "mimic",
-        "os_type": "linux",
-        "is_headless": False,
-        "proxy": {
-            "host": proxy_details['host'],
-            "type": "socks5",
-            "port": proxy_details['port'],
-            "username": proxy_details['username'],
-            "password": proxy_details['password']
-        },
-        "parameters": {
-            "fingerprint": {
-                "cmd_params": {
-                    "params": [
-                        {
-                            "flag": "disable-notifications",
-                            "value": "true"
-                        }
-                    ]
+            "name": f"{profile_details['first_name']} {profile_details['last_name']}",
+            "folder_id": FOLDER_ID,
+            "browser_type": "mimic",
+            "os_type": "linux",
+            "is_headless": False,
+            "proxy": {
+                "host": proxy_details['host'],
+                "type": "socks5",
+                "port": proxy_details['port'],
+                "username": proxy_details['username'],
+                "password": proxy_details['password']
+            },
+            "parameters": {
+                "fingerprint": {
+                    "cmd_params": {
+                        "params": [
+                            {
+                                "flag": "disable-notifications",
+                                "value": "true"
+                            }
+                        ]
+                    }
+                },
+                "flags": {
+                    "audio_masking": "natural",
+                    "fonts_masking": "mask",
+                    "geolocation_masking": "mask",
+                    "geolocation_popup": "allow",
+                    "graphics_masking": "natural",
+                    "graphics_noise": "natural",
+                    "localization_masking": "mask",
+                    "media_devices_masking": "natural",
+                    "navigator_masking": "mask",
+                    "ports_masking": "natural",
+                    "proxy_masking": "custom",
+                    "screen_masking": "natural",
+                    "timezone_masking": "mask",
+                    "webrtc_masking": "mask"
+                },
+                "storage": {
+                    "is_local": False,
+                    "save_service_worker": False
                 }
-            },
-            "flags": {
-                "audio_masking": "natural",
-                "fonts_masking": "mask",
-                "geolocation_masking": "mask",
-                "geolocation_popup": "allow",
-                "graphics_masking": "natural",
-                "graphics_noise": "natural",
-                "localization_masking": "mask",
-                "media_devices_masking": "natural",
-                "navigator_masking": "mask",
-                "ports_masking": "natural",
-                "proxy_masking": "custom",
-                "screen_masking": "natural",
-                "timezone_masking": "mask",
-                "webrtc_masking": "mask"
-            },
-            "storage": {
-                "is_local": False,
-                "save_service_worker": False
             }
-        }
         }
         url = "https://api.multilogin.com/profile/create"
         response = requests.post(url=url, headers=self.headers, json=payload)
@@ -220,13 +221,14 @@ class Mlx:
             created = True
             return profile_id, FOLDER_ID, created
 
+
 class CookieRobot:
 
-    def __init__(self,email_address: str, password: str,\
-                websites: list, profile_id=None,\
-                folder_id=None,\
-                profile_type="quick"):
-        
+    def __init__(self, email_address: str, password: str, \
+                 websites: list, profile_id=None, \
+                 folder_id=None, \
+                 profile_type="quick"):
+
         self.profile_type = profile_type
         self.folder_id = folder_id
         self.websites = websites
@@ -236,9 +238,9 @@ class CookieRobot:
     def automation(self):
         try:
             for website in self.websites:
-                domain = website.split('//')[1]\
-                    .split('/')[0]\
-                        .split('.')[0]
+                domain = website.split('//')[1] \
+                    .split('/')[0] \
+                    .split('.')[0]
                 cookie_counter = 0
                 self.driver.get(website)
                 while cookie_counter < 15:
@@ -260,16 +262,17 @@ class CookieRobot:
                             elements_with_domain.append(element)
                     random_link = random.choice(elements_with_domain)
                     try:
-                        Ac(self.driver).\
-                            move_to_element(random_link).\
-                            pause(5).\
-                                click().\
-                                    perform()
+                        Ac(self.driver). \
+                            move_to_element(random_link). \
+                            pause(5). \
+                            click(). \
+                            perform()
                         cookie_counter += 1
                     except:
                         try:
-                            self.driver.execute_script("arguments[0].scrollIntoView(true); arguments[0].click();", random_link)
-                            cookie_counter +=1
+                            self.driver.execute_script("arguments[0].scrollIntoView(true); arguments[0].click();",
+                                                       random_link)
+                            cookie_counter += 1
                         except:
                             continue
                     finally:
@@ -293,11 +296,12 @@ class CookieRobot:
             try:
                 profile_started = False
                 while not profile_started:
-                    self.profile_id, self.profile_port, profile_started, message = self.mlx.\
+                    self.profile_id, self.profile_port, profile_started, message = self.mlx. \
                         start_normal_profile(self.token, self.profile_id, self.folder_id)
                     if profile_started:
                         return
-                    print(f"Profile couldn't be started. Probably downloading core. Will wait for 60 seconds and try again. Here is the message: {message}")
+                    print(
+                        f"Profile couldn't be started. Probably downloading core. Will wait for 60 seconds and try again. Here is the message: {message}")
                     time.sleep(60)
             except Exception as e:
                 print(f"Problem with starting profile: {e}")
@@ -309,7 +313,8 @@ class CookieRobot:
                     self.profile_id, self.profile_port, profile_started, message = self.mlx.start_quick_profile()
                     if profile_started:
                         return
-                    print(f"Profile couldn't be started. Probably downloading core. Will wait for 60 seconds and try again. Here is the message: {message}")
+                    print(
+                        f"Profile couldn't be started. Probably downloading core. Will wait for 60 seconds and try again. Here is the message: {message}")
                     time.sleep(60)
             except Exception as e:
                 print(f"Problem with starting profile: {e}")

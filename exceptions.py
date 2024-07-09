@@ -8,3 +8,7 @@ class EndpointConnectionError(Exception):
 
 class TelegramConnectionError(Exception):
     pass
+
+
+class WebsiteIsNotAvailableError(Exception):
+    pass
