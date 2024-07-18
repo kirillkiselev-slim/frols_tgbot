@@ -38,30 +38,12 @@ class Mlx:
     def start_quick_profile(self, browser_type="mimic"):
         payload = {
             "browser_type": browser_type,
-            "os_type": "windows",
+            "os_type": "macos",
+            "core_version": 126,
             "is_headless": True,
             "automation": "selenium",
             "parameters": {
-                "fingerprint": {
-                    "localization": {
-                        "languages": "en-US",
-                        "locale": "en-US",
-                        "accept_languages": "en-US,en;q=0.5"
-                    },
-                    # "cmd_params":
-                    #     {
-                    #     "params": [
-                    #         {
-                    #             "flag": "--lang",
-                    #             "value": "en"
-                    #         },
-                    #         {
-                    #             "flag": "--intl.accept_languages",
-                    #             "value": "en-US"
-                    #         }
-                    #    ]
-                    # }
-                },
+                "fingerprint": {},
                 "flags": {
                     "audio_masking": "mask",
                     "fonts_masking": "mask",
@@ -222,109 +204,7 @@ class Mlx:
             return profile_id, FOLDER_ID, created
 
     def stop_all_profiles(self):
-        requests.get(url="https://launcher.mlx.yt:45001/api/v1/profile/stop_all?type=quick",
+        requests.get(url="https://api.multilogin.com/api/v1/profile/stop_all",
                      headers=self.headers)
 
 
-class CookieRobot:
-
-    def __init__(self, email_address: str, password: str, \
-                 websites: list, profile_id=None, \
-                 folder_id=None, \
-                 profile_type="quick"):
-
-        self.profile_type = profile_type
-        self.folder_id = folder_id
-        self.websites = websites
-        self.profile_id = profile_id
-        self.mlx = Mlx(email_address, password)
-
-    def automation(self):
-        try:
-            for website in self.websites:
-                domain = website.split('//')[1] \
-                    .split('/')[0] \
-                    .split('.')[0]
-                cookie_counter = 0
-                self.driver.get(website)
-                while cookie_counter < 15:
-                    current_page = self.driver.current_url
-                    # Watch Youtube videos
-                    if "watch?" in current_page:
-                        time.sleep(random.randrange(120, 240))
-                    # Watch "Shorts" videos on Youtube
-                    elif "shorts" in current_page:
-                        time.sleep(random.randrange(60, 90))
-                    self.scroll_randomly(random.randint(1, 5))
-                    link_elements = self.driver.find_elements(By.TAG_NAME, "a")
-                    elements_with_domain = []
-                    for element in link_elements:
-                        element_url = element.get_attribute('href')
-                        if element_url == None:
-                            continue
-                        if domain in element_url:
-                            elements_with_domain.append(element)
-                    random_link = random.choice(elements_with_domain)
-                    try:
-                        Ac(self.driver). \
-                            move_to_element(random_link). \
-                            pause(5). \
-                            click(). \
-                            perform()
-                        cookie_counter += 1
-                    except:
-                        try:
-                            self.driver.execute_script("arguments[0].scrollIntoView(true); arguments[0].click();",
-                                                       random_link)
-                            cookie_counter += 1
-                        except:
-                            continue
-                    finally:
-                        time.sleep(random.randint(3, 5))
-        except Exception as e:
-            print(f"Something happened: {e}")
-        finally:
-            # Close browser profile and quit driver
-            self.driver.quit()
-            self.mlx.stop_profile(self.profile_id)
-
-    def scroll_randomly(self, times):
-        for _ in range(times):
-            total_height = self.driver.execute_script("return document.body.scrollHeight")
-            random_position = random.randint(0, total_height)
-            self.driver.execute_script(f"window.scrollTo(0, {random_position});")
-            time.sleep(random.randint(1, 5))
-
-    def start_profile(self):
-        if self.profile_type == "normal":
-            try:
-                profile_started = False
-                while not profile_started:
-                    self.profile_id, self.profile_port, profile_started, message = self.mlx. \
-                        start_normal_profile(self.token, self.profile_id, self.folder_id)
-                    if profile_started:
-                        return
-                    print(
-                        f"Profile couldn't be started. Probably downloading core. Will wait for 60 seconds and try again. Here is the message: {message}")
-                    time.sleep(60)
-            except Exception as e:
-                print(f"Problem with starting profile: {e}")
-
-        elif self.profile_type == "quick":
-            try:
-                profile_started = False
-                while not profile_started:
-                    self.profile_id, self.profile_port, profile_started, message = self.mlx.start_quick_profile()
-                    if profile_started:
-                        return
-                    print(
-                        f"Profile couldn't be started. Probably downloading core. Will wait for 60 seconds and try again. Here is the message: {message}")
-                    time.sleep(60)
-            except Exception as e:
-                print(f"Problem with starting profile: {e}")
-
-    def run(self):
-        self.token = self.mlx.signin()
-        self.start_profile()
-        self.driver = self.mlx.instantiate_driver(self.profile_port)
-        self.automation()

@@ -8,6 +8,7 @@ import time
 from logging.handlers import RotatingFileHandler
 import multiprocessing as mp
 
+import psutil
 import requests
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (UnexpectedAlertPresentException,
@@ -38,7 +39,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 WEBSITE = 'http://www.encar.com/fc/fc_carsearchlist.do'
 CAR_LINK = 'http://www.encar.com/dc/dc_cardetailview.do&carid='
-RETRY_PERIOD = 300
+RETRY_PERIOD = 60
 MAIN_MESSAGE = 'Нашли новые машины! Ура! Вот список ссылок: '
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,8 @@ def send_message(bot, message):
 def start_multilogin_profile():
     mlx = Mlx(email=os.getenv('MLX_EMAIL'), password=os.getenv('MLX_PASS'))
     mlx.signin()
-    quick_profile_port = mlx.start_quick_profile()
+    quick_profile_port = mlx.start_quick_profile(browser_type='stealthfox')
+    time.sleep(60)
     driver = mlx.instantiate_driver(profile_port=quick_profile_port[1])
     return driver
 
@@ -83,6 +85,14 @@ def stop_profiles():
     mlx = Mlx(email=os.getenv('MLX_EMAIL'), password=os.getenv('MLX_PASS'))
     mlx.signin()
     mlx.stop_all_profiles()
+
+
+def log_system_usage():
+    cpu_usage = psutil.cpu_percent(interval=1)
+    memory_info = psutil.virtual_memory()
+    memory_usage_mb = memory_info.used / (1024 ** 2)
+    logger.debug(f'CPU Usage: {cpu_usage}%')
+    logger.debug(f'Memory Usage: {memory_usage_mb:.2f} MB')
 
 
 def set_filters_on_website(driver, website, model=None):
@@ -95,8 +105,8 @@ def set_filters_on_website(driver, website, model=None):
         if response.status_code != 200:
             raise WebsiteIsNotAvailableError(
                 f'{website} website is not available!\n'
-                f'Код ответа сайта: "{response.status_code}\n'
-                f' Адрес запроса: {response.url}'
+                f'Код ответа сайта: "{response.status_code}"\n'
+                f'Адрес запроса: {response.url}'
             )
 
         driver.get(website)
@@ -232,8 +242,8 @@ def parse_cars(driver, model=None):
 
     distinct_car_ids = set(all_car_ids)
 
-    logger.debug('Time taken to extract information: '
-                 f'{(time_after - time_before).total_seconds():.2f} seconds')
+    logger.debug(f'Time taken to extract information of Audi {model.upper()}:'
+                 f' {(time_after - time_before).total_seconds():.2f} seconds')
     logger.debug(f'Quantity of Audi {model.upper()}: '
                  f'{len(distinct_car_ids)}')
     return distinct_car_ids
@@ -242,6 +252,7 @@ def parse_cars(driver, model=None):
 def parse_cars_multiprocess(model: str) -> Set:
     driver = start_multilogin_profile()
     car_ids = parse_cars(driver, model)
+    driver.quit()
     return car_ids
 
 
@@ -261,26 +272,27 @@ def main():
 
             if parser_before is not None:
                 if parser_before == parser_after:
+                    log_system_usage()
                     continue
 
                 new_car_links = [f'{CAR_LINK}{car}' for car in parser_after if
                                  car not in parser_before]
                 new_links = '\n'.join(new_car_links)
+                log_system_usage()
                 logger.debug(msg='Нашли новые машины!')
                 message = f'{MAIN_MESSAGE} \U0001F389\n{new_links}'
                 send_message(bot, message)
 
+            log_system_usage()
             parser_before = parser_after
 
         except Exception as e:
             logger.exception(e)
             if error_message_not_sent:
-                send_message(bot, str(e) + '\U0001F198')
+                send_message(bot, '\U0001F198' + str(e))
                 error_message_not_sent = False
 
         finally:
-            time.sleep(1)
-            stop_profiles()
             time.sleep(RETRY_PERIOD)
 
 
