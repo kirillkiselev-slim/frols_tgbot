@@ -19,6 +19,7 @@ A system to monitor specific car models on the Encar website and notify via Tele
 - logging
 - multiprocessing
 
+
 ## Installation
 
 #### Clone the repository:
