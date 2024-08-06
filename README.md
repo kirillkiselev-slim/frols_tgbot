@@ -35,6 +35,7 @@ A system to monitor specific car models on the Encar website and notify via Tele
 
 - On Mac: `source venv/bin/activate ` 
 - On Windows: `venv\Scripts\activate`
+- 
 #### Install the required packages:
 
 `pip install -r requirements.txt`
