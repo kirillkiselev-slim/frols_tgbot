@@ -53,11 +53,12 @@ MLX_PASS=your-multilogin-password
 
 ## Usage
 ### Ensure Multilogin application is running.
-Run the main script:
+Run the car_check script:
 
-`python main.py`
+`python3 car_check.py`
 
 #### Project Structure
+
 
 ```
 frols_tgbot/
